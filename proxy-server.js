@@ -24,4 +24,7 @@ app.listen(PORT, () => {
   console.log(`Прокси-сервер запущен: http://localhost:${PORT}/api/matchdata`);
 });
 
-// Запустить этот файл через `node proxy-server.js`
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'public, max-age=10'); // Кеширование 10 сек
+  next();
+});
