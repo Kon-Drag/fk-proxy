@@ -1,36 +1,43 @@
-const express = require('express');
-const fetch = require('node-fetch');
-const cors = require('cors');
+const CACHE_TTL = 15000; // 15 секунд кеширования
+let cache = null;
+let lastUpdate = 0;
 
-const app = express();
-const PORT = 3000;
-const MATCHES_URL = 'https://iservice.fckrasnodar.ru/v10/matches/index/format/json/?langId=1';
-
-app.use(cors());
+app.use(compression());
+app.use(cors({
+  origin: ['https://cityscreen.cloud', 'http://localhost'] // Укажите нужные origin
+}));
 
 app.get('/api/matchdata', async (req, res) => {
-  if (cache && Date.now() - lastUpdate < 10000) {
-    return res.json(cache); // Отдаём кеш
-  }
-  app.get('/api/matchdata', async (req, res) => {
   try {
-    const response = await fetch(MATCHES_URL);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
+    // Отдаём кеш если он актуален
+    if (cache && Date.now() - lastUpdate < CACHE_TTL) {
+      res.set('X-Cache-Status', 'HIT');
+      return res.json(cache);
+    }
+
+    // Запрос к API с таймаутом
+    const { data } = await axios.get('https://iservice.fckrasnodar.ru/v10/matches/index/format/json/?teamId=22982&langId=1', {
+      timeout: 5000,
+      headers: {
+        'Accept-Encoding': 'gzip'
+      }
+    });
+
+    // Обновляем кеш
+    cache = data;
+    lastUpdate = Date.now();
+    res.set('X-Cache-Status', 'MISS');
     res.json(data);
-  } catch (err) {
-    console.error('Прокси ошибка:', err.message);
-    res.status(500).json({ error: 'Ошибка загрузки данных' });
+
+  } catch (error) {
+    console.error('[PROXY ERROR]', error.message);
+    
+    // Отдаём кеш даже если он устарел
+    if (cache) {
+      res.set('X-Cache-Status', 'STALE');
+      res.json(cache);
+    } else {
+      res.status(500).json({ error: 'Service unavailable' });
+    }
   }
 });
-
-  app.listen(PORT, () => {
-    console.log(`Прокси-сервер запущен: http://localhost:${PORT}/api/matchdata`);
-  });
-  
-  app.use((req, res, next) => {
-    res.set('Cache-Control', 'public, max-age=10'); // Кеширование 10 сек
-    next();
-  });
-});
-
