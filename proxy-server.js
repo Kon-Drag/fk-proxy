@@ -1,5 +1,6 @@
 const express = require('express');
-const axios = require('axios');
+const fetch = (...args) => 
+  import('node-fetch').then(({default: fetch}) => fetch(...args));
 const app = express();
 const PORT = process.env.PORT || 10000;
 
