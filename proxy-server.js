@@ -9,6 +9,10 @@ const MATCHES_URL = 'https://iservice.fckrasnodar.ru/v10/matches/index/format/js
 app.use(cors());
 
 app.get('/api/matchdata', async (req, res) => {
+  if (cache && Date.now() - lastUpdate < 10000) {
+    return res.json(cache); // Отдаём кеш
+  }
+  app.get('/api/matchdata', async (req, res) => {
   try {
     const response = await fetch(MATCHES_URL);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -20,11 +24,13 @@ app.get('/api/matchdata', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Прокси-сервер запущен: http://localhost:${PORT}/api/matchdata`);
+  app.listen(PORT, () => {
+    console.log(`Прокси-сервер запущен: http://localhost:${PORT}/api/matchdata`);
+  });
+  
+  app.use((req, res, next) => {
+    res.set('Cache-Control', 'public, max-age=10'); // Кеширование 10 сек
+    next();
+  });
 });
 
-app.use((req, res, next) => {
-  res.set('Cache-Control', 'public, max-age=10'); // Кеширование 10 сек
-  next();
-});
