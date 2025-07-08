@@ -1,43 +1,39 @@
-const CACHE_TTL = 15000; // 15 секунд кеширования
+const express = require('express');
+const axios = require('axios');
+const app = express();
+const PORT = process.env.PORT || 10000;
+
+// Middleware
+app.use(require('cors')());
+app.use(require('compression')());
+
+// Кеширование
 let cache = null;
 let lastUpdate = 0;
-
-app.use(compression());
-app.use(cors({
-  origin: ['https://cityscreen.cloud', 'http://localhost'] // Укажите нужные origin
-}));
+const CACHE_TIME = 15000;
 
 app.get('/api/matchdata', async (req, res) => {
   try {
-    // Отдаём кеш если он актуален
-    if (cache && Date.now() - lastUpdate < CACHE_TTL) {
-      res.set('X-Cache-Status', 'HIT');
+    if (cache && Date.now() - lastUpdate < CACHE_TIME) {
       return res.json(cache);
     }
 
-    // Запрос к API с таймаутом
     const { data } = await axios.get('https://iservice.fckrasnodar.ru/v10/matches/index/format/json/?teamId=22982&langId=1', {
-      timeout: 5000,
-      headers: {
-        'Accept-Encoding': 'gzip'
-      }
+      timeout: 4000
     });
 
-    // Обновляем кеш
     cache = data;
     lastUpdate = Date.now();
-    res.set('X-Cache-Status', 'MISS');
     res.json(data);
-
   } catch (error) {
-    console.error('[PROXY ERROR]', error.message);
-    
-    // Отдаём кеш даже если он устарел
-    if (cache) {
-      res.set('X-Cache-Status', 'STALE');
-      res.json(cache);
-    } else {
-      res.status(500).json({ error: 'Service unavailable' });
-    }
+    console.error('Proxy error:', error.message);
+    res.status(500).json({ error: 'Service unavailable' });
   }
+});
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'public, max-age=10'); // Кеширование 10 сек
+  next();
 });
